@@ -19,9 +19,9 @@ import (
 	"golang.org/x/text/collate"
 	"golang.org/x/text/language"
 
-	"xodus-nexus/internal/diagnostics"
-	"xodus-nexus/internal/proc"
-	"xodus-nexus/internal/shared"
+	"xodus-nexus-wails/internal/diagnostics"
+	"xodus-nexus-wails/internal/proc"
+	"xodus-nexus-wails/internal/shared"
 )
 
 type Entitlement struct {
@@ -109,23 +109,11 @@ func jsonBool(raw json.RawMessage) (bool, bool) {
 
 func isNull(raw json.RawMessage) bool { return string(bytes.TrimSpace(raw)) == "null" }
 
-func jsLen(value string) int {
-	n := 0
-	for _, r := range value {
-		if r > 0xFFFF {
-			n += 2
-		} else {
-			n++
-		}
-	}
-	return n
-}
-
 // validRow returns the typed entitlement, or ok=false for a row that must be quarantined.
 func validRow(row map[string]json.RawMessage, id string) (Entitlement, bool) {
 	e := Entitlement{ProductID: id}
 	var ok bool
-	if e.Status, ok = jsonString(row["status"]); !ok || jsLen(e.Status) >= 40 {
+	if e.Status, ok = jsonString(row["status"]); !ok || shared.UTF16Len(e.Status) >= 40 {
 		return e, false
 	}
 	if e.IsTrial, ok = jsonBool(row["isTrial"]); !ok {
@@ -134,7 +122,7 @@ func validRow(row map[string]json.RawMessage, id string) (Entitlement, bool) {
 	if e.Special, ok = jsonBool(row["special"]); !ok {
 		return e, false
 	}
-	if e.SharingSource, ok = jsonString(row["sharingSource"]); !ok || jsLen(e.SharingSource) >= 40 {
+	if e.SharingSource, ok = jsonString(row["sharingSource"]); !ok || shared.UTF16Len(e.SharingSource) >= 40 {
 		return e, false
 	}
 	if raw, present := row["isPositron"]; present {
@@ -144,7 +132,7 @@ func validRow(row map[string]json.RawMessage, id string) (Entitlement, bool) {
 		}
 		e.IsPositron = &positron
 	}
-	if e.EndDate, ok = jsonString(row["endDate"]); !ok || jsLen(e.EndDate) >= 50 {
+	if e.EndDate, ok = jsonString(row["endDate"]); !ok || shared.UTF16Len(e.EndDate) >= 50 {
 		return e, false
 	}
 	if e.end, ok = shared.ParseJSDate(e.EndDate); !ok {

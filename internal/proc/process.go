@@ -17,9 +17,9 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"xodus-nexus/internal/diagnostics"
-	"xodus-nexus/internal/launcherenv"
-	"xodus-nexus/internal/shared"
+	"xodus-nexus-wails/internal/diagnostics"
+	"xodus-nexus-wails/internal/launcherenv"
+	"xodus-nexus-wails/internal/shared"
 )
 
 type RunOptions struct {

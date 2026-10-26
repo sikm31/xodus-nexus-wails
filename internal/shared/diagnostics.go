@@ -41,8 +41,8 @@ func setOf(values ...string) map[string]struct{} {
 	return set
 }
 
-// utf16Len matches JavaScript string length for the bounded-line checks.
-func utf16Len(value string) int {
+// UTF16Len matches JavaScript string length.
+func UTF16Len(value string) int {
 	n := 0
 	for _, r := range value {
 		if r > 0xFFFF {
@@ -55,7 +55,7 @@ func utf16Len(value string) int {
 }
 
 func parseStageLine(pattern *regexp.Regexp, stages map[string]struct{}, line string) (Diagnostic, bool) {
-	if utf16Len(line) > 128 || strings.ContainsAny(line, "\r\n") {
+	if UTF16Len(line) > 128 || strings.ContainsAny(line, "\r\n") {
 		return Diagnostic{}, false
 	}
 	match := pattern.FindStringSubmatch(line)

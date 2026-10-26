@@ -15,7 +15,7 @@ import (
 	"syscall"
 	"time"
 
-	"xodus-nexus/internal/shared"
+	"xodus-nexus-wails/internal/shared"
 )
 
 var operations = setOf("account", "profile", "achievements", "library", "login", "logout", "streaming", "download", "license", "run", "resolve-package", "service", "probe")

@@ -8,7 +8,7 @@ import (
 	"strings"
 	"syscall"
 
-	"xodus-nexus/internal/shared"
+	"xodus-nexus-wails/internal/shared"
 )
 
 func openDiagnosticFile(file, root string) (*os.File, string, error) {

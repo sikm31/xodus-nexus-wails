@@ -15,7 +15,7 @@ import (
 	"testing"
 	"time"
 
-	"xodus-nexus/internal/shared"
+	"xodus-nexus-wails/internal/shared"
 )
 
 const (

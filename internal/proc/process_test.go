@@ -11,8 +11,8 @@ import (
 	"testing"
 	"time"
 
-	"xodus-nexus/internal/diagnostics"
-	"xodus-nexus/internal/launcherenv"
+	"xodus-nexus-wails/internal/diagnostics"
+	"xodus-nexus-wails/internal/launcherenv"
 )
 
 type lineLog struct {

@@ -148,14 +148,14 @@ func DownloadFailure(log []string, exitCode int) string {
 			sessionEnded.MatchString(line) || scriptDone.MatchString(line) {
 			continue
 		}
-		return fmt.Sprintf("Xodus exited with code %d: %s", exitCode, truncateUTF16(line, 300))
+		return fmt.Sprintf("Xodus exited with code %d: %s", exitCode, TruncateUTF16(line, 300))
 	}
 	return fmt.Sprintf("Xodus exited with code %d", exitCode)
 }
 
-// truncateUTF16 mirrors String.prototype.slice(0, n) closely enough for UI text
+// TruncateUTF16 mirrors String.prototype.slice(0, n) closely enough for UI text
 // without splitting a UTF-8 sequence.
-func truncateUTF16(value string, limit int) string {
+func TruncateUTF16(value string, limit int) string {
 	units := 0
 	for index, r := range value {
 		width := 1
