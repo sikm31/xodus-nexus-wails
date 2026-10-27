@@ -106,9 +106,11 @@ func defaultUserData() string {
 	return filepath.Join(config, "xodus-nexus-wails")
 }
 
+// profileKey is used as a D-Bus name element, which must not start with a
+// digit, so the hex digest gets a letter prefix.
 func profileKey(userData string) string {
 	sum := sha256.Sum256([]byte(userData))
-	return fmt.Sprintf("%x", sum[:8])
+	return fmt.Sprintf("p%x", sum[:8])
 }
 
 // configureFonts adds the bundled fallback font before GTK and WebKit
