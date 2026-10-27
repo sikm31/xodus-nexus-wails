@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Xodus Nexus
+Comment=Xbox-inspired Microsoft Store game launcher for Linux
+Exec=xodus-nexus-wails %U
+Icon=xodus-nexus-wails
+Categories=Game;
+StartupWMClass=xodus-nexus-wails
+Terminal=false

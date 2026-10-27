@@ -118,6 +118,21 @@ Run the built binary:
 make run
 ```
 
+### AppImage (Steam Deck)
+
+SteamOS has a read-only system and does not ship GTK 4 or WebKitGTK 6.0, so
+the Steam Deck uses a self-contained AppImage with these libraries bundled:
+
+```sh
+make appimage   # writes build/bin/xodus-nexus-wails-x86_64.AppImage
+```
+
+Each GitHub release includes it. On the Steam Deck, in Desktop Mode, download
+`xodus-nexus-wails-<version>-x86_64.AppImage`, make it executable
+(`chmod +x`, or Properties → Permissions → Is executable) and run it. To use it
+in Game Mode, add it to Steam with **Add a Non-Steam Game**, or with
+**Add Nexus to Steam** in the launcher settings.
+
 Run the Go and frontend tests:
 
 ```sh

@@ -53,6 +53,11 @@ jobs:
       - name: Build
         run: make build VERSION="${TAG#v}"
 
+      # Self-contained build for the Steam Deck (SteamOS cannot install GTK 4
+      # or WebKitGTK 6.0) and other distributions without these libraries.
+      - name: Build AppImage
+        run: make appimage VERSION="${TAG#v}"
+
       - name: Package
         run: |
           name="xodus-nexus-wails-${TAG}-linux-amd64"
@@ -60,13 +65,16 @@ jobs:
           cp build/bin/xodus-nexus-wails LICENSE README.md "$name/"
           tar -czf "$name.tar.gz" "$name"
           sha256sum "$name.tar.gz" > "$name.tar.gz.sha256"
+          appimage="xodus-nexus-wails-${TAG}-x86_64.AppImage"
+          mv build/bin/xodus-nexus-wails-x86_64.AppImage "$appimage"
+          sha256sum "$appimage" > "$appimage.sha256"
 
       # Attach to the release if it was already created by hand, otherwise create it.
       - name: Publish release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          files="xodus-nexus-wails-*.tar.gz xodus-nexus-wails-*.tar.gz.sha256"
+          files="xodus-nexus-wails-*.tar.gz* xodus-nexus-wails-*.AppImage*"
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" $files --clobber
           else
