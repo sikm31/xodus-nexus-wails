@@ -1,0 +1,60 @@
+name: release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install system libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-4-dev libwebkitgtk-6.0-dev build-essential pkg-config
+
+      # The tag must match the version in frontend/package.json.
+      - name: Check version
+        run: |
+          pkg_version=$(node -p "require('./frontend/package.json').version")
+          if [ "v$pkg_version" != "$GITHUB_REF_NAME" ]; then
+            echo "Tag $GITHUB_REF_NAME does not match package.json version $pkg_version" >&2
+            exit 1
+          fi
+
+      - name: Test
+        run: make test
+
+      - name: Build
+        run: make build VERSION="${GITHUB_REF_NAME#v}"
+
+      - name: Package
+        run: |
+          name="xodus-nexus-wails-${GITHUB_REF_NAME}-linux-amd64"
+          mkdir "$name"
+          cp build/bin/xodus-nexus-wails LICENSE README.md "$name/"
+          tar -czf "$name.tar.gz" "$name"
+          sha256sum "$name.tar.gz" > "$name.tar.gz.sha256"
+
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            xodus-nexus-wails-*.tar.gz xodus-nexus-wails-*.tar.gz.sha256 \
+            --title "$GITHUB_REF_NAME" --generate-notes
