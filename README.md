@@ -62,68 +62,88 @@ Known limitations:
 
 - Linux
 - Go 1.27+
-- [Wails CLI](https://wails.io/docs/gettingstarted/installation)
+- GNU Make
 - Node.js — build time only, to compile the TypeScript/React frontend
   (not needed to run the built binary)
 - GTK 4 and WebKitGTK 6.0 development libraries (plus a C compiler and
   `pkg-config`, needed by cgo)
 
+The Wails CLI is not required: the project is built with plain `go build`
+through the `Makefile`.
+
 ### System libraries
 
 Fedora / RHEL:
-```
 
-sh sudo dnf install gtk4-devel webkitgtk6.0-devel gcc pkgconf-pkg-config``` 
+```sh
+sudo dnf install gtk4-devel webkitgtk6.0-devel gcc pkgconf-pkg-config
+```
 
 Ubuntu (24.04+) / Debian (12+):
-```
 
-sh sudo apt install libgtk-4-dev libwebkitgtk-6.0-dev build-essential pkg-config```
+```sh
+sudo apt install libgtk-4-dev libwebkitgtk-6.0-dev build-essential pkg-config
+```
 
 Arch Linux / Manjaro:
-```
 
-sh sudo pacman -S gtk4 webkitgtk-6.0 base-devel pkgconf``` 
+```sh
+sudo pacman -S gtk4 webkitgtk-6.0 base-devel pkgconf
+```
 
 Other distributions: install the GTK 4 and WebKitGTK 6.0 development
 packages, then check that both are found:
-```
 
-sh pkg-config --modversion gtk4 webkitgtk-6.0```
+```sh
+pkg-config --modversion gtk4 webkitgtk-6.0
+```
 
 ## Build and run
+
+Build the frontend and the binary (installs npm dependencies on first run):
+
+```sh
+make
 ```
 
-sh
-development mode with hot reload
-wails dev
-production build
-wails build``` 
+The binary embeds `frontend/dist`, so the frontend is always built first.
+The version defaults to the one in `frontend/package.json`; override it with
+`make VERSION=1.2.3`.
 
 Run the built binary:
+
+```sh
+./build/bin/xodus-nexus-wails
+# or build and run in one step
+make run
 ```
 
-sh ./build/bin/xodus-nexus-wails```
+Run the Go and frontend tests:
 
-Run the tests:
+```sh
+make test
 ```
 
-sh go test ./...``` 
+Run the Go tests with the race detector:
 
-Run the tests with the race detector:
+```sh
+make test-race
 ```
-
-sh go test -race ./...```
 
 Build the frontend only:
+
+```sh
+make frontend
 ```
 
-sh cd frontend npm run build``` 
+Remove build output:
+
+```sh
+make clean
+```
 
 ## License
 
 MIT, same as the original project. See [LICENSE](LICENSE).
 
 Original work © Xodus Nexus contributors.
-```
-
