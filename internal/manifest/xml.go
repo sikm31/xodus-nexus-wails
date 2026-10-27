@@ -65,6 +65,9 @@ func Parse(xml string) (*Node, error) {
 	if xml == "" || utf8.RuneCountInString(xml) > 1_048_576 || strings.ContainsRune(xml, 0) {
 		return nil, errors.New("Unsupported package manifest.")
 	}
+	// MicrosoftGame.config is often saved with a UTF-8 BOM; JS trim() dropped
+	// it, strings.TrimSpace does not.
+	xml = strings.TrimPrefix(xml, "\ufeff")
 	container := &Node{}
 	stack := []*Node{container}
 	nodes := 0

@@ -116,7 +116,8 @@ func profileKey(userData string) string {
 // configureFonts adds the bundled fallback font before GTK and WebKit
 // initialize fontconfig (for example on minimal gamescope sessions).
 func configureFonts(userData string) func() {
-	directory := filepath.Join(userData, "fonts")
+	root := fontRoot(userData)
+	directory := filepath.Join(root, "fonts")
 	if err := os.MkdirAll(directory, 0o700); err != nil {
 		return nil
 	}
@@ -130,10 +131,20 @@ func configureFonts(userData string) func() {
 			return nil
 		}
 	}
-	dispose, err := launcherenv.ConfigureLauncherFonts(directory, filepath.Join(userData, "font-cache"), "")
+	dispose, err := launcherenv.ConfigureLauncherFonts(directory, filepath.Join(root, "cache"), root)
 	if err != nil {
 		log.Print("Launcher fallback font unavailable: ", err)
 		return nil
 	}
 	return dispose
+}
+
+// fontRoot keeps the font, its cache and the generated fonts.conf under
+// $XDG_CACHE_HOME/fontconfig: the WebKit web process sandbox binds that
+// directory, but has a private /tmp and cannot see the user data directory.
+func fontRoot(userData string) string {
+	if cache, err := os.UserCacheDir(); err == nil {
+		return filepath.Join(cache, "fontconfig", "xodus-nexus-wails")
+	}
+	return userData
 }

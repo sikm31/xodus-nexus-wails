@@ -37,6 +37,9 @@ func TestManifestLookup(t *testing.T) {
 	if Text(mustParse(t, "<Game>\n<StoreId>9AAAAAAAAAAA</StoreId \t>\n</Game \n>"), "StoreId") != "9AAAAAAAAAAA" {
 		t.Error("whitespace before >")
 	}
+	if Text(mustParse(t, "\ufeff<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<Game><StoreId>9AAAAAAAAAAA</StoreId></Game>"), "StoreId") != "9AAAAAAAAAAA" {
+		t.Error("UTF-8 BOM before the XML declaration")
+	}
 	for _, xml := range []string{
 		`<!DOCTYPE Game [<!ENTITY x SYSTEM "file:///secret">]><Game>&x;</Game>`,
 		`<!DOCTYPE Game SYSTEM "https://example.invalid/no.xml"><Game/>`,
