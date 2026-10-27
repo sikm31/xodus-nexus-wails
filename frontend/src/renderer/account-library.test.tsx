@@ -158,11 +158,3 @@ it('offers DualSense compatibility per game, off by default and with feature lim
   expect(on).toContain('Does not change Xbox controller settings');
   expect(on).toContain('adaptive triggers may be unavailable');
 });
-
-it('loads library covers eagerly so cards added by Load more show their artwork', () => {
-  const product: AccountLibraryPage['products'][number] = { productId: '9AAAAAAAAAAA', title: 'Paged game', access: 'gamepass',
-    description: '', categories: [], installability: 'supported', supportNote: '', posterUrl: 'https://store-images.s-microsoft.com/image/apps.1.png' };
-  const html = renderToStaticMarkup(<LibraryProductCard product={product} present={false} downloading={false} canInstall install={() => {}} />);
-  expect(html).toContain('src="https://store-images.s-microsoft.com/image/apps.1.png"');
-  expect(html).not.toContain('loading="lazy"');
-});

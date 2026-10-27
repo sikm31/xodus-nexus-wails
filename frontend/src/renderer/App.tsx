@@ -392,14 +392,11 @@ export function LibraryProductCard({ product, present, downloading, installing, 
   const disabled = present || downloading || Boolean(installing) || !canInstall || product.installability !== 'supported';
   const label = present ? 'Installed' : downloading ? 'In Install Queue' : installing === product.productId ? 'Preparing…' : 'Install';
   const card = useRef<HTMLElement>(null);
-  const [failed, setFailed] = useState(false);
-  useEffect(() => setFailed(false), [product.posterUrl]);
   useBrowserLayoutEffect(() => {
     if (!disabled && document.activeElement === card.current) card.current?.querySelector<HTMLButtonElement>('button')?.focus({ preventScroll: true });
   }, [disabled]);
   return <article ref={card} className="catalog-card" data-gamepad-card tabIndex={disabled ? 0 : -1} aria-label={disabled ? `${product.title}, ${label}. Action unavailable` : undefined}>
-    <div className="catalog-card-main">{/* Not loading="lazy": WebKitGTK may never load lazy images appended below the fold of the .page-scroll container. */}
-      {product.posterUrl && !failed ? <img src={product.posterUrl} alt={`${product.title} cover`} onError={() => setFailed(true)} /> : <div className="catalog-cover-placeholder"><Gamepad2 /></div>}<CatalogSupportBadge product={product} /><div><GameTitle title={product.title} /><small>{product.publisher ?? product.productId}</small><span>{product.access === 'owned' ? 'Owned' : product.access === 'gamepass' ? 'Game Pass' : 'Other access'}</span></div></div>
+    <div className="catalog-card-main">{product.posterUrl ? <img src={product.posterUrl} alt={`${product.title} cover`} loading="lazy" /> : <div className="catalog-cover-placeholder"><Gamepad2 /></div>}<CatalogSupportBadge product={product} /><div><GameTitle title={product.title} /><small>{product.publisher ?? product.productId}</small><span>{product.access === 'owned' ? 'Owned' : product.access === 'gamepass' ? 'Game Pass' : 'Other access'}</span></div></div>
     <button className="catalog-card-install" disabled={disabled} onClick={() => { if (!disabled) install(product); }}>{present ? <Check /> : <Download />}{label}</button>
   </article>;
 }

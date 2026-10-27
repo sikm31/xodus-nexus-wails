@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -39,6 +40,40 @@ func safeURL(value any, hosts map[string]bool) string {
 		return ""
 	}
 	parsed.Host = strings.ToLower(parsed.Host)
+	return parsed.String()
+}
+
+// Store images are full-size originals (a box art is 2160×2160, about 1 MB).
+// The image service scales them to the requested width, keeping the ratio.
+const (
+	coverWidth = 600
+	heroWidth  = 1920
+)
+
+func sizedImage(raw string, width int) string {
+	parsed, err := url.Parse(raw)
+	if raw == "" || err != nil || !imageHosts[parsed.Hostname()] {
+		return raw
+	}
+	query := parsed.Query()
+	if query.Has("w") || query.Has("h") {
+		return raw
+	}
+	query.Set("w", strconv.Itoa(width))
+	parsed.RawQuery = query.Encode()
+	return parsed.String()
+}
+
+// OriginalImage undoes sizedImage, for artwork exported at full quality
+// (Steam library art) rather than shown in a launcher tile.
+func OriginalImage(raw string) string {
+	parsed, err := url.Parse(raw)
+	if raw == "" || err != nil || !imageHosts[parsed.Hostname()] {
+		return raw
+	}
+	query := parsed.Query()
+	query.Del("w")
+	parsed.RawQuery = query.Encode()
 	return parsed.String()
 }
 

@@ -51,7 +51,7 @@ func TestParseProducts(t *testing.T) {
 		t.Error("foreign image host accepted")
 	}
 	first["boxArtUrl"] = "https://store-images.s-microsoft.com/image/boxart"
-	if got := ParseProducts(map[string]any{"productsList": []any{first}}, decode(t, catalogJSON))[0].PosterURL; got != "https://store-images.s-microsoft.com/image/boxart" {
+	if got := ParseProducts(map[string]any{"productsList": []any{first}}, decode(t, catalogJSON))[0].PosterURL; got != "https://store-images.s-microsoft.com/image/boxart?w=600" {
 		t.Errorf("box art = %q", got)
 	}
 }
@@ -127,7 +127,7 @@ func TestArtwork(t *testing.T) {
 {"ImagePurpose":"BoxArt","Uri":"//store-images.s-microsoft.com/image/boxart"}]}]},
 {"ProductId":"9FOREIGN","LocalizedProperties":[{"Images":[{"ImagePurpose":"BoxArt","Uri":"//tracker.example.com/image/boxart"}]}]}]}`)).
 		Posters(context.Background(), []string{"9game123", "9foreign", "bad id"}, "US")
-	if posters["9GAME123"] != "https://store-images.s-microsoft.com/image/boxart" || posters["9FOREIGN"] != "" {
+	if posters["9GAME123"] != "https://store-images.s-microsoft.com/image/boxart?w=600" || posters["9FOREIGN"] != "" {
 		t.Errorf("posters = %v", posters)
 	}
 	artwork := NewService(respond(`{"Products":[{"ProductId":"9GAME123","LocalizedProperties":[{"Images":[
@@ -136,7 +136,7 @@ func TestArtwork(t *testing.T) {
 {"ImagePurpose":"TitledHeroArt","Uri":"//store-images.s-microsoft.com/titled-hero"}]}]},
 {"ProductId":"9OTHER","LocalizedProperties":[{"Images":[{"ImagePurpose":"BoxArt","Uri":"//store-images.s-microsoft.com/other"}]}]}]}`)).
 		Artwork(context.Background(), []string{"9game123"}, "US")
-	if artwork["9GAME123"] != (Artwork{"https://store-images.s-microsoft.com/box", "https://store-images.s-microsoft.com/titled-hero"}) || len(artwork) != 1 {
+	if artwork["9GAME123"] != (Artwork{"https://store-images.s-microsoft.com/box?w=600", "https://store-images.s-microsoft.com/titled-hero?w=1920"}) || len(artwork) != 1 {
 		t.Errorf("artwork = %v", artwork)
 	}
 	offline := func(context.Context, string, int64) (Response, error) { return Response{}, errors.New("Offline") }
@@ -310,3 +310,22 @@ func TestDepthNotExtendedByOtherRoots(t *testing.T) {
 
 type sharedProduct = sharedCatalogProduct
 type sharedCatalogProduct = shared.CatalogProduct
+
+func TestSizedImage(t *testing.T) {
+	for _, tc := range []struct{ in, want string }{
+		{"https://store-images.s-microsoft.com/image/apps.1", "https://store-images.s-microsoft.com/image/apps.1?w=600"},
+		{"https://store-images.s-microsoft.com/image/apps.1?w=300", "https://store-images.s-microsoft.com/image/apps.1?w=300"},
+		{"https://images-eds-ssl.xboxlive.com/image?url=x", "https://images-eds-ssl.xboxlive.com/image?url=x"},
+		{"", ""},
+	} {
+		if got := sizedImage(tc.in, coverWidth); got != tc.want {
+			t.Errorf("sizedImage(%q) = %q, want %q", tc.in, got, tc.want)
+		}
+	}
+}
+
+func TestOriginalImage(t *testing.T) {
+	if got := OriginalImage(sizedImage("https://store-images.s-microsoft.com/image/apps.1", coverWidth)); got != "https://store-images.s-microsoft.com/image/apps.1" {
+		t.Errorf("OriginalImage = %q", got)
+	}
+}

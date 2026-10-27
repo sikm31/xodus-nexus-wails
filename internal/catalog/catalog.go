@@ -70,6 +70,10 @@ func NormalizeMarket(input string) string {
 }
 
 func findImage(product map[string]any, types []string) string {
+	return sizedImage(findOriginalImage(product, types), coverWidth)
+}
+
+func findOriginalImage(product map[string]any, types []string) string {
 	// Box art carries the game's title branding; poster art is often textless
 	// promotional key art, so it is only a fallback.
 	if boxArt := safeURL(product["boxArtUrl"], imageHosts); boxArt != "" {
@@ -100,7 +104,7 @@ func findHero(product map[string]any) string {
 		image := object(entry)
 		kind := strings.ToLower(str(image["imageType"]))
 		if image != nil && (kind == "superheroart" || kind == "hero") {
-			return safeURL(image["url"], imageHosts)
+			return sizedImage(safeURL(image["url"], imageHosts), heroWidth)
 		}
 	}
 	return ""
@@ -434,7 +438,7 @@ func (s *Service) GameDetails(ctx context.Context, productID, rawMarket string) 
 		screenshots = []string{}
 	}
 	value := shared.GameStoreDetails{ProductID: productID, Title: title, Description: shared.TruncateUTF16(str(localized["ProductDescription"]), 64_000),
-		Publisher: shared.TruncateUTF16(str(localized["PublisherName"]), 512), HeroURL: displayImage(objects, heroPurposes),
+		Publisher: shared.TruncateUTF16(str(localized["PublisherName"]), 512), HeroURL: sizedImage(displayImage(objects, heroPurposes), heroWidth),
 		Categories: categories, Screenshots: screenshots, ReleaseDate: str(marketProperties["OriginalReleaseDate"])}
 	s.mu.Lock()
 	if _, exists := s.gameCache[key]; !exists {
@@ -831,7 +835,7 @@ func (s *Service) Artwork(ctx context.Context, ids []string, rawMarket string) m
 				first = object(localized[0])
 			}
 			images := list(first["Images"])
-			cover, hero := displayImage(images, posterPurposes), displayImage(images, heroPurposes)
+			cover, hero := sizedImage(displayImage(images, posterPurposes), coverWidth), sizedImage(displayImage(images, heroPurposes), heroWidth)
 			if cover != "" || hero != "" {
 				artwork[id] = Artwork{cover, hero}
 			}

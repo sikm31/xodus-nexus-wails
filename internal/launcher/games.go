@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"xodus-nexus-wails/internal/backend"
+	"xodus-nexus-wails/internal/catalog"
 	"xodus-nexus-wails/internal/game"
 	"xodus-nexus-wails/internal/imageutil"
 	"xodus-nexus-wails/internal/install"
@@ -779,7 +780,7 @@ func (l *Launcher) addToSteam(id *string) (string, error) {
 	var cover []byte
 	var launchGame *shortcuts.Game
 	if entry != nil {
-		cover = shortcuts.LoadIcon("", entry.CoverURL, normalize, nil)
+		cover = shortcuts.LoadIcon("", catalog.OriginalImage(entry.CoverURL), normalize, nil)
 		if cover == nil {
 			cover = shortcuts.LoadIcon(entry.CoverDataURL, "", normalize, nil)
 		}
@@ -798,7 +799,7 @@ func (l *Launcher) addToSteam(id *string) (string, error) {
 	if entry != nil {
 		var wide []byte
 		if entry.HeroURL != "" {
-			wide = shortcuts.LoadIcon("", entry.HeroURL, normalize, nil)
+			wide = shortcuts.LoadIcon("", catalog.OriginalImage(entry.HeroURL), normalize, nil)
 		}
 		source := cover
 		if source == nil {
