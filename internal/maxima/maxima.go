@@ -125,12 +125,27 @@ func commandExists(command string) bool {
 	return err == nil
 }
 
+// Building Maxima needs Git, Cargo, a C compiler (ring, zlib) and protoc
+// (its EA RTM protobuf definitions are compiled at build time).
+var buildTools = []string{"git", "cargo", "cc", "protoc"}
+
+const buildToolsHint = "Building Maxima needs Git, Rust (Cargo), a C compiler and protoc. For example: sudo dnf install git cargo rust gcc protobuf-compiler (Fedora) or sudo apt install git cargo gcc protobuf-compiler (Ubuntu/Debian)."
+
+func buildToolsFound() bool {
+	for _, tool := range buildTools {
+		if !commandExists(tool) {
+			return false
+		}
+	}
+	return true
+}
+
 // Refresh re-reads the active build and sign-in state from disk.
 func (m *Manager) Refresh() shared.MaximaStatus {
 	current := m.readPointer()
 	m.mu.Lock()
 	s := &m.status
-	s.PinnedCommit, s.SignedIn, s.CanBuild = SourceLock.Commit, signedIn(), commandExists("git") && commandExists("cargo")
+	s.PinnedCommit, s.SignedIn, s.CanBuild = SourceLock.Commit, signedIn(), buildToolsFound()
 	s.Available, s.Commit = current != nil, ""
 	if current != nil {
 		s.Commit = current.Commit
@@ -198,8 +213,8 @@ func signingIn(s *shared.MaximaStatus) *bool { return &s.SigningIn }
 // maxima-cli plus maxima-bootstrap (the qrc:// sign-in handler) with Cargo.
 // The previous build stays active until the new one is complete.
 func (m *Manager) Build() (err error) {
-	if !commandExists("git") || !commandExists("cargo") {
-		return errors.New("Git and Cargo are required to build Maxima. Install the Rust toolchain (for example: sudo dnf install cargo rust).")
+	if !buildToolsFound() {
+		return errors.New(buildToolsHint)
 	}
 	if err := m.begin("Building Maxima…", building); err != nil {
 		return err

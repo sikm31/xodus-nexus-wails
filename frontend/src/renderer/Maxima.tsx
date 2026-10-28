@@ -23,7 +23,7 @@ export function MaximaCard({ status, busy, invoke }: { status?: MaximaStatus; bu
     <p className="fine-print">Installs EA games into the Nexus download queue, without the EA app window. <a href="https://github.com/ArmchairDevelopers/Maxima" target="_blank" rel="noreferrer">Maxima</a> is open-source software by ArmchairDevelopers under GPL-3.0, run as a separate program.</p>
     {status?.error ? <div className="alert amber"><CircleAlert /><span>{status.error}</span></div> : null}
     {status?.phase ? <div className="runtime-phase"><LoaderCircle className="spin" /><span>{status.phase}</span></div> : null}
-    {!status?.canBuild ? <div className="alert amber"><CircleAlert /><span>Building Maxima needs Git and Cargo: sudo dnf install cargo rust</span></div> : null}
+    {!status?.canBuild ? <div className="alert amber"><CircleAlert /><span>Building Maxima needs Git, Rust (Cargo), a C compiler and protoc: sudo dnf install git cargo rust gcc protobuf-compiler</span></div> : null}
     {newerUpstream ? <p className="fine-print">Newer Maxima upstream: {short(status.upstreamCommit)}. Nexus builds the tested commit; newer ones arrive with launcher updates.</p> : null}
     <div className="meta-grid"><div><span>EA ACCOUNT</span><strong>{status?.signedIn ? status.account ?? 'Signed in' : 'Not signed in'}</strong></div><div><span>PINNED</span><strong className="mono">{short(status?.pinnedCommit)}</strong></div></div>
     <div className="button-row">

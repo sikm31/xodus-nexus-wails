@@ -70,9 +70,18 @@ launcher by ArmchairDevelopers. Nexus builds a pinned Maxima version locally
 and runs it as a separate program to install and launch EA games. Downloads
 use the Nexus install queue, and the games appear in the Nexus library.
 
-1. **Settings → Maxima → Build** (needs Git and the Rust toolchain, for
-   example `sudo dnf install cargo rust`; the first build takes several
-   minutes).
+1. **Settings → Maxima → Build**. The first build takes several minutes and
+   needs Git, Rust (Cargo), a C compiler and `protoc`. These are build tools
+   only; the built Maxima needs nothing extra to run.
+
+   ```sh
+   sudo dnf install git cargo rust gcc protobuf-compiler      # Fedora
+   sudo apt install git cargo gcc protobuf-compiler           # Ubuntu / Debian
+   sudo pacman -S git rust gcc protobuf                       # Arch
+   ```
+
+   On the Steam Deck (read-only SteamOS) these tools are not available by
+   default; use the official EA app there instead.
 2. **Sign in** there. EA's sign-in page opens in the browser, and Maxima
    stores its token in `~/.local/share/maxima/auth.toml`. Nexus never sees
    EA credentials and does not read or copy that token.
