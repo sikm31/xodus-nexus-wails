@@ -71,6 +71,22 @@ func TestMultiProductEditionAndEAppx(t *testing.T) {
 	}
 }
 
+func TestEALauncherProduct(t *testing.T) {
+	search := decode(t, `{"productsList":[{"productId":"9nz90qlg3h0v","title":"Dead Space 2","isGame":true},{"productId":"9sku0rosebud","title":"Sku Only","isGame":true},{"productId":"9p02rmwg3sp9","title":"Dead Space","isGame":true}]}`)
+	products := ParseProducts(search, decode(t, `{"Products":[
+{"ProductId":"9NZ90QLG3H0V","Properties":{"PackageFamilyName":"ElectronicArtsMobile.Rosebud-DeadSpace2_q5ha1ztykcgvj"},"DisplaySkuAvailabilities":[{"Sku":{"Properties":{"Packages":[]}}}]},
+{"ProductId":"9SKU0ROSEBUD","DisplaySkuAvailabilities":[{"Sku":{"Properties":{"FulfillmentData":{"PackageFamilyName":"ElectronicArtsMobile.Rosebud-Game_q5ha1ztykcgvj"}}}}]},
+{"ProductId":"9P02RMWG3SP9","Properties":{"PackageFamilyName":"ElectronicArtsMobile.43679F9D4A6E9_q5ha1ztykcgvj","ProductGroupName":"Rosebud"},"DisplaySkuAvailabilities":[{"Sku":{"Properties":{"Packages":[]}}}]}]}`))
+	if len(products) != 3 {
+		t.Fatalf("products = %d", len(products))
+	}
+	for _, p := range products {
+		if p.Installability != "unsupported" || p.Distributor != "ea-app" || !strings.Contains(p.SupportNote, "Maxima") {
+			t.Errorf("%s = %+v", p.ProductID, p)
+		}
+	}
+}
+
 func TestLicensedProducts(t *testing.T) {
 	data := `{"Products":[{"ProductId":"9AAAAAAAAAAA","ProductType":"Game","LocalizedProperties":[{"ProductTitle":"Licensed PC Game","PublisherName":"Studio"}],
 "DisplaySkuAvailabilities":[{"Sku":{"Properties":{"Packages":[{"PackageFormat":"MSIXVC","PlatformDependencies":[{"PlatformName":"Windows.Desktop"}]}]}}}]},

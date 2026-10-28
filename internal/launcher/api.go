@@ -16,6 +16,8 @@ import (
 	"time"
 
 	"xodus-nexus-wails/internal/diagnostics"
+	"xodus-nexus-wails/internal/eaapp"
+
 	"xodus-nexus-wails/internal/game"
 	"xodus-nexus-wails/internal/install"
 	"xodus-nexus-wails/internal/launcherenv"
@@ -371,6 +373,109 @@ func (l *Launcher) Logout() error {
 	return l.requestAuth("logout")
 }
 
+// InstallEAApp downloads and runs EA's installer in the EA app prefix. It
+// returns once the interactive installer has closed.
+func (l *Launcher) InstallEAApp() error {
+	if l.options.Demo {
+		return nil
+	}
+	return l.eaApp.Install(context.Background())
+}
+
+func (l *Launcher) LaunchEAApp() error {
+	if l.options.Demo {
+		return nil
+	}
+	return l.eaApp.Launch()
+}
+
+// SignOutEAApp closes the EA app and removes its stored sign-in session.
+func (l *Launcher) SignOutEAApp() error {
+	if l.options.Demo {
+		return nil
+	}
+	return l.eaApp.SignOut()
+}
+
+func (l *Launcher) StopEAApp() error {
+	if l.options.Demo {
+		return nil
+	}
+	return l.eaApp.Stop()
+}
+
+// OpenEAAppFor starts the EA app for an EA Play title and copies the title,
+// ready to paste into its search: Store metadata carries no EA offer ID.
+func (l *Launcher) OpenEAAppFor(title string) error {
+	if l.options.Demo {
+		return nil
+	}
+	status := l.eaApp.Current()
+	if !status.Installed {
+		return errors.New("Set up the EA app in Settings first, then install EA Play games from it.")
+	}
+	if !status.Running {
+		if err := l.eaApp.Launch(); err != nil {
+			return err
+		}
+	}
+	if title != "" {
+		if err := l.host.SetClipboard(title); err != nil {
+			log.Print("Could not copy the EA Play title: ", err)
+		}
+	}
+	return nil
+}
+
+// BuildMaxima builds the pinned Maxima source; it returns when done.
+func (l *Launcher) BuildMaxima() error {
+	if l.options.Demo {
+		return nil
+	}
+	return l.maxima.Build()
+}
+
+// CheckMaximaUpdate refreshes the build state and looks up the newest
+// upstream commit.
+func (l *Launcher) CheckMaximaUpdate() (shared.MaximaStatus, error) {
+	if l.options.Demo {
+		return shared.MaximaStatus{}, nil
+	}
+	l.maxima.Refresh()
+	err := l.maxima.CheckUpstream(context.Background())
+	return l.maxima.Current(), err
+}
+
+func (l *Launcher) SignInMaxima() error {
+	if l.options.Demo {
+		return nil
+	}
+	return l.maxima.SignIn(context.Background())
+}
+
+func (l *Launcher) SignOutMaxima() error {
+	if l.options.Demo {
+		return nil
+	}
+	return l.maxima.SignOut()
+}
+
+// GetEALibrary lists the EA account's games through Maxima.
+func (l *Launcher) GetEALibrary() ([]shared.EATitle, error) {
+	if l.options.Demo {
+		return []shared.EATitle{}, nil
+	}
+	return l.maxima.Library(context.Background())
+}
+
+// OpenEAAccountLinking opens the EA page that connects an Xbox account.
+func (l *Launcher) OpenEAAccountLinking() error {
+	if l.options.Demo {
+		return nil
+	}
+	return l.host.OpenPath(eaapp.LinkAccountsURL)
+}
+
 func (l *Launcher) SearchCatalog(query string, cursor *string) (shared.CatalogSearchResult, error) {
 	value := ""
 	if cursor != nil {
@@ -414,7 +519,15 @@ func (l *Launcher) GetAccountLibrary(kind string, cursor *string, refresh *bool)
 	if cursor != nil {
 		value = *cursor
 	}
-	return l.library.Get(context.Background(), kind, value, refresh != nil && *refresh)
+	page, err := l.library.Get(context.Background(), kind, value, refresh != nil && *refresh)
+	if err == nil {
+		products := make([]shared.CatalogProduct, len(page.Products))
+		for i, product := range page.Products {
+			products[i] = product.CatalogProduct
+		}
+		go l.syncEAGames(products)
+	}
+	return page, err
 }
 
 func (l *Launcher) StartInstall(request shared.InstallRequest) (string, error) {

@@ -58,6 +58,73 @@ Known limitations:
 - AppImage packaging is not implemented yet.
 - Auto-update is disabled until this port has its own release channel.
 
+## EA and EA Play games
+
+Game Pass titles that are distributed by EA (EA Play) have no Microsoft
+Store package, so Xodus cannot install them. Nexus handles them in two ways.
+
+### Maxima (recommended)
+
+[Maxima](https://github.com/ArmchairDevelopers/Maxima) is an open-source EA
+launcher by ArmchairDevelopers. Nexus builds a pinned Maxima version locally
+and runs it as a separate program to install and launch EA games. Downloads
+use the Nexus install queue, and the games appear in the Nexus library.
+
+1. **Settings → Maxima → Build** (needs Git and the Rust toolchain, for
+   example `sudo dnf install cargo rust`; the first build takes several
+   minutes).
+2. **Sign in** there. EA's sign-in page opens in the browser, and Maxima
+   stores its token in `~/.local/share/maxima/auth.toml`. Nexus never sees
+   EA credentials and does not read or copy that token.
+3. Install an EA game from the Store page in Nexus with **Install with
+   Maxima**.
+
+Games you own install right away. **EA Play** games must be on your EA
+account first: add each game once with **Download** in the EA app (see below,
+or on Windows). You can cancel that download. After that the game installs
+and launches through Maxima. Nexus matches Store titles to the EA library by
+name, ignoring edition suffixes such as "Ultimate Edition" or "Game of the
+Year Edition".
+
+Everything runs under the EA account signed in to Maxima on this computer.
+Each user signs in with their own account. Nothing from your account is
+included in the build or in releases.
+
+### Official EA app
+
+**Settings → EA app** installs the official EA app in its own Proton prefix
+(needs GE-Proton or Proton Experimental from Steam) and runs it. Sign-in,
+Xbox account linking and downloads happen inside the EA app. Use it to add
+EA Play games to your account, or as a fallback: when Maxima is not set up,
+**Install** opens the EA app instead.
+
+### Games
+
+Status of the games in the EA library this was tried with. "Not tested" means
+the game is on the EA account but has not been installed or launched through
+Nexus yet.
+
+| Game | Status |
+| --- | --- |
+| A Way Out | Not tested |
+| Apex Legends | Not expected to work: its anti-cheat blocks Linux |
+| Battlefield 1 | Not expected to work: EA anti-cheat (Javelin) blocks Linux |
+| Battlefield 4 | Not tested |
+| Battlefield V | Not expected to work: EA anti-cheat (Javelin) blocks Linux |
+| Dead Space (2023) | Not tested |
+| Dead Space 2 | Installs and launches through Maxima |
+| Dead Space 3 | Not tested |
+| Dragon Age 2 | Not tested |
+| Dragon Age: Inquisition (EA Play, added through the EA app) | Installs through Maxima; launch not tested |
+| Mass Effect Legendary Edition | Not tested |
+| Need for Speed Most Wanted (2012) | Not tested |
+| STAR WARS Jedi: Fallen Order | Not tested |
+| Titanfall 2 | Not tested |
+
+It has not been confirmed yet that games available only through an EA Play
+subscription pass the license check when launched through Maxima. Please
+report which games work.
+
 ## Requirements
 
 - Linux
@@ -162,3 +229,7 @@ make clean
 MIT, same as the original project. See [LICENSE](LICENSE).
 
 Original work © Xodus Nexus contributors.
+
+Maxima is not part of this repository's MIT code: it is GPL-3.0, and so are
+the Maxima patches in [`assets/maxima/`](assets/maxima/README.md). Nexus
+builds Maxima from source and runs it as a separate program.

@@ -87,6 +87,10 @@ func PrepareWrapper(wine string, tools *shared.GameLaunchTools, root string, env
 		}
 		environment["PROTON_DISABLE_HIDRAW"] = disabled
 	}
+	// An explicit WINE_CPU_TOPOLOGY in the launch options wins.
+	if topology := shared.CPUTopology(normalized.CPULimit); topology != "" && environment["WINE_CPU_TOPOLOGY"] == "" {
+		environment["WINE_CPU_TOPOLOGY"] = topology
+	}
 	if !normalized.MangoHud && !normalized.Gamescope && len(options.Prefix) == 0 && len(environment) == 0 && len(options.GameArgs) == 0 {
 		return none, nil
 	}

@@ -106,6 +106,9 @@ type GameLaunchTools struct {
 	Gamescope              bool   `json:"gamescope"`
 	GamescopeArgs          string `json:"gamescopeArgs"`
 	LaunchOptions          string `json:"launchOptions"`
+	// CPULimit caps the logical CPUs Wine reports; 0 means no limit. Older
+	// games crash on hosts with many cores (Dead Space 2 divides by zero).
+	CPULimit int `json:"cpuLimit,omitempty"`
 }
 
 type AntiCheat struct {
@@ -135,6 +138,9 @@ type Game struct {
 	InstallMessage    string           `json:"installMessage,omitempty"`
 	VCRedistEncrypted *bool            `json:"vcRedistEncrypted,omitempty"`
 	AntiCheat         *AntiCheat       `json:"antiCheat,omitempty"`
+	Provider          string           `json:"provider,omitempty"` // maxima: launched through Maxima, not Xodus
+	OfferID           string           `json:"offerId,omitempty"`
+	EASlug            string           `json:"eaSlug,omitempty"`
 	AddedAt           string           `json:"addedAt"`
 }
 
@@ -154,7 +160,9 @@ type DownloadTask struct {
 	SelectedContentID string   `json:"selectedContentId,omitempty"`
 	SelectionMarket   string   `json:"selectionMarket,omitempty"`
 	Destination       string   `json:"destination"`
-	Status            string   `json:"status"` // queued | running | paused | complete | failed | cancelled
+	Provider          string   `json:"provider,omitempty"` // maxima: an EA game installed by Maxima
+	OfferID           string   `json:"offerId,omitempty"`  // EA offer, with provider maxima
+	Status            string   `json:"status"`             // queued | running | paused | complete | failed | cancelled
 	CanPause          bool     `json:"canPause,omitempty"`
 	ControlPending    bool     `json:"controlPending,omitempty"`
 	Cancelling        bool     `json:"cancelling,omitempty"`
@@ -256,6 +264,46 @@ type AppSnapshot struct {
 	GameOperation             *GameOperation        `json:"gameOperation,omitempty"`
 	GameUpdates               map[string]GameUpdate `json:"gameUpdates,omitempty"`
 	DownloadProgressSupported bool                  `json:"downloadProgressSupported,omitempty"`
+	EAApp                     *EAAppStatus          `json:"eaApp,omitempty"`
+	Maxima                    *MaximaStatus         `json:"maxima,omitempty"`
+}
+
+// MaximaStatus describes the Maxima build that installs and launches EA games.
+type MaximaStatus struct {
+	Available      bool   `json:"available"`
+	Commit         string `json:"commit,omitempty"`         // active build
+	PinnedCommit   string `json:"pinnedCommit"`             // build this launcher version expects
+	UpstreamCommit string `json:"upstreamCommit,omitempty"` // latest Maxima commit, informational
+	BuildRequired  bool   `json:"buildRequired"`
+	Building       bool   `json:"building"`
+	SignedIn       bool   `json:"signedIn"`
+	SigningIn      bool   `json:"signingIn"`
+	Account        string `json:"account,omitempty"`
+	Phase          string `json:"phase,omitempty"`
+	Error          string `json:"error,omitempty"`
+	CanBuild       bool   `json:"canBuild"` // git and cargo are installed
+}
+
+// EATitle is a game in the signed-in EA account's library.
+type EATitle struct {
+	Slug      string `json:"slug"`
+	Name      string `json:"name"`
+	OfferID   string `json:"offerId"`
+	Installed bool   `json:"installed"`
+	// ExecutePath is the installed game executable, when installed.
+	ExecutePath string `json:"executePath,omitempty"`
+}
+
+// EAAppStatus describes the EA app kept in its own Proton prefix for EA Play titles.
+type EAAppStatus struct {
+	Installed bool   `json:"installed"`
+	Running   bool   `json:"running"`
+	SignedIn  bool   `json:"signedIn"`
+	Busy      bool   `json:"busy"`
+	Proton    string `json:"proton,omitempty"` // display name of the selected Proton build
+	Phase     string `json:"phase,omitempty"`
+	Error     string `json:"error,omitempty"`
+	LogPath   string `json:"logPath,omitempty"`
 }
 
 type InstallRequest struct {
@@ -321,6 +369,7 @@ type CatalogProduct struct {
 	Installability   string   `json:"installability"` // supported | unsupported | unknown
 	PackageFormat    string   `json:"packageFormat,omitempty"`
 	SupportNote      string   `json:"supportNote"`
+	Distributor      string   `json:"distributor,omitempty"` // ea-app: installed through the EA app, not Xodus
 }
 
 // GameStoreDetails is public catalog data only, never an ownership/installation decision.

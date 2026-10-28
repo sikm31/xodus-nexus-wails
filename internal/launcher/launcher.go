@@ -18,12 +18,14 @@ import (
 	"xodus-nexus-wails/internal/catalog"
 	"xodus-nexus-wails/internal/content"
 	"xodus-nexus-wails/internal/diagnostics"
+	"xodus-nexus-wails/internal/eaapp"
 	"xodus-nexus-wails/internal/game"
 	"xodus-nexus-wails/internal/imageutil"
 	"xodus-nexus-wails/internal/install"
 	"xodus-nexus-wails/internal/keyring"
 	"xodus-nexus-wails/internal/launcherenv"
 	"xodus-nexus-wails/internal/library"
+	"xodus-nexus-wails/internal/maxima"
 	"xodus-nexus-wails/internal/proc"
 	"xodus-nexus-wails/internal/protonruntime"
 	"xodus-nexus-wails/internal/service"
@@ -62,6 +64,10 @@ type Launcher struct {
 	backend               *backend.Manager
 	backendLog            *diagnostics.Backend
 	runtime               *protonruntime.Manager
+	eaApp                 *eaapp.Manager
+	maxima                *maxima.Manager
+	eaLibraryCache        []shared.EATitle
+	eaLibraryAt           time.Time
 	operations            map[string]*proc.Tracked
 	gameProcesses         map[string]*game.Process
 	cancelledDownloads    map[string]bool
@@ -298,6 +304,10 @@ func Startup(l *Launcher) error {
 		l.mu.Unlock()
 		return busy || l.keyring.Busy() || l.queue.Size() > 0 || l.runtime.Current().Updating
 	}, nil)
+	l.eaApp = eaapp.NewManager(func() eaapp.Paths {
+		return eaapp.Paths{Root: filepath.Join(filepath.Dir(l.store.Settings().RuntimeRoot), "ea-app"), SteamRoot: filepath.Join(home, ".steam", "root")}
+	}, l.selectedWine, l.scheduleSnapshot, nil)
+	l.maxima = maxima.NewManager(filepath.Join(l.userData, "maxima-builds"), l.emitLog, l.scheduleSnapshot)
 	l.backend.Refresh()
 	l.runtime.Refresh()
 	l.markReady()
@@ -448,6 +458,16 @@ func (l *Launcher) snapshot() shared.AppSnapshot {
 	status, runtime := l.backend.Current(), l.runtime.Current()
 	games, downloads, settings := l.store.Games(), l.store.Downloads(), l.store.Settings()
 	profile, update := l.profile.Value(), l.updater.State()
+	var eaApp *shared.EAAppStatus
+	if l.eaApp != nil {
+		value := l.eaApp.Current()
+		eaApp = &value
+	}
+	var maximaStatus *shared.MaximaStatus
+	if l.maxima != nil {
+		value := l.maxima.Current()
+		maximaStatus = &value
+	}
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	for index, task := range downloads {
@@ -463,7 +483,7 @@ func (l *Launcher) snapshot() shared.AppSnapshot {
 	return shared.AppSnapshot{
 		Backend: status, Runtime: runtime, Games: games, Downloads: downloads,
 		Settings: settings, Auth: auth, LauncherUpdate: &update, GameUpdates: shared.Clone(l.gameUpdates),
-		DownloadProgressSupported: status.Capabilities.StreamingProgressJSON, GameOperation: shared.Clone(l.gameOperation),
+		DownloadProgressSupported: status.Capabilities.StreamingProgressJSON, GameOperation: shared.Clone(l.gameOperation), EAApp: eaApp, Maxima: maximaStatus,
 	}
 }
 

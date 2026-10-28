@@ -7,8 +7,8 @@ export interface LibraryFilters {
 }
 export const defaultLibraryFilters: LibraryFilters = { kind: 'all', playState: 'all', query: '' };
 
-export function libraryProductMatchesPlayState(product: Pick<CatalogProduct, 'installability'>, playState: LibraryFilters['playState']): boolean {
-  return playState !== 'installed' && (playState !== 'installable' || product.installability === 'supported');
+export function libraryProductMatchesPlayState(product: Pick<CatalogProduct, 'installability' | 'distributor'>, playState: LibraryFilters['playState']): boolean {
+  return playState !== 'installed' && (playState !== 'installable' || product.installability === 'supported' || product.distributor === 'ea-app');
 }
 const key = 'xodus-nexus.library-filters.v1';
 type Preferences = Pick<Storage, 'getItem' | 'setItem'>;

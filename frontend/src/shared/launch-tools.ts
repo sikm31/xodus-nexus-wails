@@ -1,5 +1,7 @@
 import type { GameLaunchTools } from './types.js';
 
+export const maxCPULimit = 64;
+
 export const defaultLaunchTools: GameLaunchTools = { dualSenseCompatibility: false, mangoHud: false, gamescope: false, gamescopeArgs: '', launchOptions: '' };
 
 /** Command words only, never a shell program. Quotes group literal arguments. */
@@ -47,7 +49,9 @@ export function normalizeLaunchTools(value: unknown): GameLaunchTools {
   const tools = value as Record<string, unknown>;
   if (typeof tools.mangoHud !== 'boolean' || typeof tools.gamescope !== 'boolean' || typeof tools.gamescopeArgs !== 'string' || typeof tools.launchOptions !== 'string') throw Error('Invalid game launch tools.');
   if (tools.dualSenseCompatibility !== undefined && typeof tools.dualSenseCompatibility !== 'boolean') throw Error('Invalid DualSense compatibility setting.');
-  const result = { dualSenseCompatibility: tools.dualSenseCompatibility ?? false, mangoHud: tools.mangoHud, gamescope: tools.gamescope, gamescopeArgs: tools.gamescopeArgs.trim(), launchOptions: tools.launchOptions.trim() };
+  if (tools.cpuLimit !== undefined && tools.cpuLimit !== null && (!Number.isInteger(tools.cpuLimit) || (tools.cpuLimit as number) < 0 || (tools.cpuLimit as number) > maxCPULimit)) throw Error(`The CPU core limit must be between 1 and ${maxCPULimit}.`);
+  const result: GameLaunchTools = { dualSenseCompatibility: tools.dualSenseCompatibility ?? false, mangoHud: tools.mangoHud, gamescope: tools.gamescope, gamescopeArgs: tools.gamescopeArgs.trim(), launchOptions: tools.launchOptions.trim() };
+  if (typeof tools.cpuLimit === 'number' && tools.cpuLimit > 0) result.cpuLimit = tools.cpuLimit;
   const args = commandWords(result.gamescopeArgs);
   if (args.includes('--') || args.some(arg => arg.includes('%command%'))) throw Error('Gamescope options must not include -- or %command%; Nexus adds the game command.');
   parseLaunchOptions(result.launchOptions);

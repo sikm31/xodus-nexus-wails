@@ -9,7 +9,7 @@ import type { AccountLibraryPage, AppSnapshot, CatalogProduct, CatalogSearchResu
 import { estimateTimeRemaining } from '../shared/utils';
 import { nexusRuntimeUpdateAvailable, runtimeDisplay } from '../shared/runtime-display';
 import { subscriptionBadge } from '../shared/subscription';
-import { defaultLaunchTools, normalizeLaunchTools } from '../shared/launch-tools';
+import { defaultLaunchTools, maxCPULimit, normalizeLaunchTools } from '../shared/launch-tools';
 import type { GameLaunchTools } from '../shared/types';
 import { catalogInstallRequest, PackageInstallProvider, usePackageInstall } from './PackageInstall';
 import { defaultLibraryFilters, loadLibraryFilters, saveLibraryFilters, libraryProductMatchesPlayState, type LibraryFilters } from './library-preferences';
@@ -21,6 +21,8 @@ import { GameDetails } from './GameDetails';
 import { GameLanguage } from './GameLanguage';
 import { DownloadCancelDialog } from './DownloadCancelDialog';
 import { KeyringSetup } from './KeyringSetup';
+import { EAAppCard, eaInstallThroughApp, installEAGame, isEAPlay, maximaReady } from './EAApp';
+import { MaximaCard } from './Maxima';
 import { DiagnosticReportButton } from './DiagnosticReport';
 import type { DownloadCancelOptions } from '../shared/types';
 export type { LibraryFilters } from './library-preferences';
@@ -177,12 +179,19 @@ function useGameLaunchOptions(game: Game | undefined, data: AppSnapshot): GameLa
   return options;
 }
 
+// EA games run through Maxima; everything else needs the Xodus backend and Wine.
+function canPlayGame(data: AppSnapshot, game: Game): boolean {
+  if (game.installState !== 'ready') return false;
+  if (game.provider === 'maxima') return maximaReady(data);
+  return Boolean(data.backend.capabilities.run && (data.settings.winePath || data.runtime.winePath));
+}
+
 export function HomePage({ data, go, action }: {
   data: AppSnapshot; go: (page: Page) => void; action: (fn: () => Promise<unknown>, success?: string) => void;
 }) {
   const featured = data.games[0];
   const active = data.downloads.find((task) => task.status === 'running' || task.status === 'paused');
-  const canPlay = Boolean(featured?.installState === 'ready' && data.backend.capabilities.run && (data.settings.winePath || data.runtime.winePath));
+  const canPlay = Boolean(featured && canPlayGame(data, featured));
   const launchOptions = useGameLaunchOptions(featured, data);
   const spotlightArt = featured?.heroUrl ?? featured?.coverUrl;
 
@@ -222,6 +231,7 @@ export function HomePage({ data, go, action }: {
 }
 
 function CatalogSupportBadge({ product }: { product: CatalogProduct }) {
+  if (isEAPlay(product)) return <span className="catalog-support ea-play" title={product.supportNote}>EA Play</span>;
   return <span className={`catalog-support ${product.installability}`} title={product.supportNote}
     aria-label={product.installability === 'unknown' ? 'Package support unknown' : undefined}>{product.installability === 'supported' ? 'PC' : product.installability === 'unknown' ? '?' : 'Unsupported'}</span>;
 }
@@ -295,6 +305,15 @@ function StorePage({ data, toast, go, initialQuery }: { data: AppSnapshot; toast
 
   async function install(product: CatalogProduct, target = installDestination(product)) {
     setBusy(product.productId);
+    if (isEAPlay(product)) {
+      try {
+        const result = await installEAGame(data, product, target);
+        toast({ kind: 'info', message: result.message });
+        if (result.queued) go('downloads');
+      } catch (error) { toast({ kind: 'error', message: errorMessage(error) }); }
+      finally { setBusy(undefined); }
+      return;
+    }
     try {
       if (!await startPackageInstall(catalogInstallRequest(product, target))) return;
       toast({ kind: 'success', message: `Xodus is checking the license and installing ${product.title}.` });
@@ -324,8 +343,8 @@ function StorePage({ data, toast, go, initialQuery }: { data: AppSnapshot; toast
   const productGrid = (products: CatalogProduct[]) => <div className="catalog-grid" data-gamepad-grid>{products.map((product) => {
     const installed = isInstalled(product);
     return <StoreProductCard key={product.productId} product={product} selected={selected?.productId === product.productId}
-      disabled={product.installability !== 'supported' || Boolean(busy) || !data.backend.capabilities.streaming || installed || isQueued(product)}
-      label={installed ? 'Installed' : isQueued(product) ? 'In Install Queue' : busy === product.productId ? 'Preparing…' : 'Install'}
+      disabled={Boolean(busy) || installed || isQueued(product) || (!isEAPlay(product) && (product.installability !== 'supported' || !data.backend.capabilities.streaming))}
+      label={installed ? 'Installed' : isQueued(product) ? 'In Install Queue' : busy === product.productId ? 'Preparing…' : isEAPlay(product) && eaInstallThroughApp(data) ? 'Install in EA app' : 'Install'}
       select={selectProduct} install={install} />;
   })}</div>;
   return <main className="page store-page">
@@ -333,8 +352,8 @@ function StorePage({ data, toast, go, initialQuery }: { data: AppSnapshot; toast
     {!catalog ? <section className="featured-catalog"><SectionTitle title="Featured" />{featuredLoading ? <div className="catalog-loading"><LoaderCircle className="spin" /><span>Loading live Store collection…</span></div> : featured?.products.length ? <><div className="featured-rail">{featured.products.slice(0, 3).map((product) => <button className="featured-tile" key={product.productId} onClick={() => selectProduct(product)}>{product.heroUrl || product.posterUrl ? <img src={product.heroUrl ?? product.posterUrl} alt="" /> : <div className="featured-tile-placeholder"><Gamepad2 /></div>}<span className="featured-tile-copy"><GameTitle title={product.title} /><small>{product.publisher ?? 'Microsoft Store'} · {product.installability === 'supported' ? 'PC package verified' : 'Check package support'}</small></span></button>)}</div><SectionTitle title="Trending PC games" />{productGrid(featured.products.slice(3))}</> : <div className="catalog-empty"><Store /><h2>Featured games are temporarily unavailable</h2><p>{featuredError ?? 'Search still works with live Microsoft Store data.'}</p></div>}</section> : null}
 
     {selected ? <section className={`catalog-selection ${selected.heroUrl ? 'has-art' : ''}`} style={selected.heroUrl ? { '--catalog-hero': `url(${selected.heroUrl})` } as React.CSSProperties : undefined}>
-      <div className="catalog-selection-copy"><span className="overline">SELECTED PRODUCT</span><h2>{selected.title}</h2><div className="catalog-badges">{selected.purchasePrice ? <span>{selected.purchasePrice}</span> : null}{selected.includedWith ? <span className="pass">Available with {selected.includedWith}</span> : null}<span className={selected.installability}>{selected.installability === 'supported' ? 'PC MSIXVC verified' : selected.installability}</span></div><p>{selected.description}</p><small>{selected.publisher ?? 'Publisher unavailable'} · Store ID {selected.productId}{selected.installProductId ? ` · Package ID ${selected.installProductId}` : ''}</small></div>
-      <div className="catalog-install-box"><p className={selected.installability === 'supported' ? 'supported' : 'unsupported'}>{selected.supportNote}</p><label>Install location<div className="input-action"><input value={destination} onChange={(event) => setDestination(event.target.value)} /><button type="button" onClick={chooseDestination} title="Choose folder"><FolderOpen /></button></div></label><div className="button-row"><button className="primary" disabled={selected.installability !== 'supported' || Boolean(busy) || !data.backend.capabilities.streaming || isInstalled(selected) || isQueued(selected)} onClick={() => install(selected, destination)}>{busy === selected.productId ? <LoaderCircle className="spin" /> : isInstalled(selected) ? <Check /> : <ArrowDownToLine />}{isInstalled(selected) ? 'Installed' : isQueued(selected) ? 'In Install Queue' : 'Install with Xodus'}</button>{selected.storeUrl ? <button className="secondary" onClick={() => window.open(selected.storeUrl, '_blank')}>Store page</button> : null}</div></div>
+      <div className="catalog-selection-copy"><span className="overline">SELECTED PRODUCT</span><h2>{selected.title}</h2><div className="catalog-badges">{selected.purchasePrice ? <span>{selected.purchasePrice}</span> : null}{selected.includedWith ? <span className="pass">Available with {selected.includedWith}</span> : null}{isEAPlay(selected) ? <span className="ea-play">EA Play · EA app</span> : <span className={selected.installability}>{selected.installability === 'supported' ? 'PC MSIXVC verified' : selected.installability}</span>}</div><p>{selected.description}</p><small>{selected.publisher ?? 'Publisher unavailable'} · Store ID {selected.productId}{selected.installProductId ? ` · Package ID ${selected.installProductId}` : ''}</small></div>
+      <div className="catalog-install-box"><p className={selected.installability === 'supported' ? 'supported' : 'unsupported'}>{selected.supportNote}</p><label>Install location<div className="input-action"><input value={destination} onChange={(event) => setDestination(event.target.value)} /><button type="button" onClick={chooseDestination} title="Choose folder"><FolderOpen /></button></div></label><div className="button-row">{isEAPlay(selected) ? <button className="primary" disabled={Boolean(busy)} onClick={() => install(selected)}>{busy === selected.productId ? <LoaderCircle className="spin" /> : <ArrowDownToLine />}{eaInstallThroughApp(data) ? 'Install in EA app' : maximaReady(data) ? 'Install with Maxima' : 'Install'}</button> : null}<button className="primary" hidden={isEAPlay(selected)} disabled={selected.installability !== 'supported' || Boolean(busy) || !data.backend.capabilities.streaming || isInstalled(selected) || isQueued(selected)} onClick={() => install(selected, destination)}>{busy === selected.productId ? <LoaderCircle className="spin" /> : isInstalled(selected) ? <Check /> : <ArrowDownToLine />}{isInstalled(selected) ? 'Installed' : isQueued(selected) ? 'In Install Queue' : 'Install with Xodus'}</button>{selected.storeUrl ? <button className="secondary" onClick={() => window.open(selected.storeUrl, '_blank')}>Store page</button> : null}</div></div>
     </section> : null}
 
     {catalog ? <><SectionTitle title={`Results for “${catalog.query}”`} />{productGrid(catalog.products)}{catalog.products.length === 0 ? <div className="empty-state compact"><div><Search /></div><h2>No games found</h2><p>Try a different title or a Microsoft Store Product ID.</p></div> : null}{catalog.hasMore ? <div className="load-more"><button className="secondary" disabled={loadingMore} onClick={loadMore}>{loadingMore ? <LoaderCircle className="spin" /> : <Plus />}Load more results</button></div> : null}</> : null}
@@ -386,11 +405,12 @@ export function LibraryPagination({ loading, hasMore, load, searching = false }:
   </div>;
 }
 
-export function LibraryProductCard({ product, present, downloading, installing, canInstall, install }: {
+export function LibraryProductCard({ product, present, downloading, installing, canInstall, install, eaThroughApp = false }: {
   product: AccountLibraryPage['products'][number]; present: boolean; downloading: boolean; installing?: string; canInstall: boolean; install: (product: CatalogProduct) => void;
+  eaThroughApp?: boolean;
 }) {
-  const disabled = present || downloading || Boolean(installing) || !canInstall || product.installability !== 'supported';
-  const label = present ? 'Installed' : downloading ? 'In Install Queue' : installing === product.productId ? 'Preparing…' : 'Install';
+  const disabled = present || downloading || Boolean(installing) || (!isEAPlay(product) && (!canInstall || product.installability !== 'supported'));
+  const label = present ? 'Installed' : downloading ? 'In Install Queue' : installing === product.productId ? 'Preparing…' : isEAPlay(product) && eaThroughApp ? 'Install in EA app' : 'Install';
   const card = useRef<HTMLElement>(null);
   useBrowserLayoutEffect(() => {
     if (!disabled && document.activeElement === card.current) card.current?.querySelector<HTMLButtonElement>('button')?.focus({ preventScroll: true });
@@ -466,10 +486,17 @@ export function AccountGames({ data, toast, selectedId, select, menu, filters, o
     finally { if (currentIdentity.current === identity) setBusy(false); }
   }
   async function install(product: CatalogProduct) {
+    const folder = product.title.normalize('NFKD').replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-+|-+$/g, '').slice(0, 80) || product.productId;
+    if (isEAPlay(product)) {
+      setInstalling(product.productId);
+      try { toast({ kind: 'info', message: (await installEAGame(data, product, `${data.settings.installRoot.replace(/\/+$/, '')}/${folder}`)).message }); }
+      catch (error) { toast({ kind: 'error', message: errorMessage(error) }); }
+      finally { setInstalling(undefined); }
+      return;
+    }
     if (product.installability !== 'supported') { toast({ kind: 'error', message: product.supportNote }); return; }
     setInstalling(product.productId);
     try {
-      const folder = product.title.normalize('NFKD').replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-+|-+$/g, '').slice(0, 80) || product.productId;
       if (!await startPackageInstall(catalogInstallRequest(product, `${data.settings.installRoot.replace(/\/+$/, '')}/${folder}`))) return;
       toast({ kind: 'success', message: `${product.title} added to Install Queue.` });
     } catch (error) { toast({ kind: 'error', message: errorMessage(error) }); }
@@ -499,7 +526,7 @@ export function AccountGames({ data, toast, selectedId, select, menu, filters, o
         const product = row.product!;
         const present = installed.has(product.productId) || installed.has(product.installProductId ?? '');
         const downloading = queued.has(product.productId) || queued.has(product.installProductId ?? '');
-        return <LibraryProductCard key={product.productId} product={product} present={present} downloading={downloading} installing={installing} canInstall={data.backend.capabilities.streaming} install={install} />;
+        return <LibraryProductCard key={product.productId} product={product} present={present} downloading={downloading} installing={installing} canInstall={data.backend.capabilities.streaming} install={install} eaThroughApp={eaInstallThroughApp(data)} />;
       })}</div>
       {!busy && !searching && !error && !rows.length ? <p>{visible?.cursor && playState !== 'installed' ? 'No games match these filters in the loaded results. Load more to continue.' : 'No games match these filters.'}</p> : null}
       <div data-gamepad-library-footer><LibraryPagination loading={busy} hasMore={Boolean(visible?.cursor)} searching={searching} load={() => { void load(); }} />
@@ -563,6 +590,9 @@ export function GameLaunchToolFields({ value, change }: { value: GameLaunchTools
   return <fieldset className="game-launch-tools"><legend>Launch tools</legend>
     <label className="tool-checkbox"><input type="checkbox" checked={value.dualSenseCompatibility === true} onChange={event => update({ dualSenseCompatibility: event.target.checked })} /><span>DualSense compatibility mode</span></label>
     <small>Try this if a standard DualSense controller is not detected. Disables its native HIDRAW input for this game only. Advanced haptics and adaptive triggers may be unavailable. Does not change Xbox controller settings.</small>
+    <label className="tool-checkbox"><input type="checkbox" checked={Boolean(value.cpuLimit)} onChange={event => update({ cpuLimit: event.target.checked ? 8 : undefined })} /><span>Limit CPU cores</span></label>
+    {value.cpuLimit ? <label>Logical CPU cores<input type="number" min={1} max={maxCPULimit} value={value.cpuLimit} onChange={event => update({ cpuLimit: Math.min(maxCPULimit, Math.max(1, Math.round(Number(event.target.value)) || 1)) })} /></label> : null}
+    <small>Older games can crash on processors with many cores, for example Dead Space 2. Shows the game only this many cores (WINE_CPU_TOPOLOGY). Older EA games start with a limit of 8.</small>
     <label className="tool-checkbox"><input type="checkbox" checked={value.mangoHud} onChange={event => update({ mangoHud: event.target.checked })} /><span>Enable MangoHud</span></label>
     <label className="tool-checkbox"><input type="checkbox" checked={value.gamescope} onChange={event => update({ gamescope: event.target.checked })} /><span>Run in gamescope</span></label>
     {value.gamescope ? <label>Gamescope options<input value={value.gamescopeArgs} maxLength={2048} placeholder="-W 1920 -H 1080 -f" onChange={event => update({ gamescopeArgs: event.target.value })} /><small>Only options. Nexus adds the game command. MangoHud with gamescope requires mangoapp.</small></label> : null}
@@ -733,7 +763,7 @@ export function LibraryPage({ data, toast, filters, onFiltersChange, selection }
     contentDisabled: !game.storeId || data.auth.stored !== true || !data.backend.capabilities.library,
   });
   const selectedPanel = selected && detailOpen ? <GameDetails key={`${selected.id}:${data.auth.username}:${data.auth.stored}:${data.auth.running}:${data.backend.binaryPath}:${data.settings.market}`} game={selected} data={data} back={() => setDetailOpen(false)} play={<>
-          <button className="primary" data-gamepad-play disabled={gameBusy || selected.installState !== 'ready' || !data.backend.capabilities.run || !(data.settings.winePath || data.runtime.winePath)} onClick={() => play()}>{gameBusy ? <LoaderCircle className="spin" /> : <Play fill="currentColor" />}{gameBusy ? 'Working…' : 'Play'}</button>
+          <button className="primary" data-gamepad-play disabled={gameBusy || !canPlayGame(data, selected)} onClick={() => play()}>{gameBusy ? <LoaderCircle className="spin" /> : <Play fill="currentColor" />}{gameBusy ? 'Working…' : 'Play'}</button>
           {gameBusy && !(selectedOperation?.kind === 'prerequisite' && selectedOperation.status === 'running') ? <button className="secondary danger" onClick={stopGame}><X />Stop</button> : null}
         </>} manage={<GameMenuActions {...managementProps(selected)} />} technical={<dl><div><dt>Store ID</dt><dd>{selected.storeId ?? 'Not found'}</dd></div><div><dt>Executable</dt><dd>{selected.executable ?? 'Not found'}</dd></div><div><dt>Location</dt><dd>{selected.path}</dd></div></dl>} notices={<>
       {selected.installMessage ? <div className="alert amber"><CircleAlert /><span>{selected.installMessage}</span></div> : null}
@@ -893,6 +923,9 @@ export function SettingsPage({ data, toast }: { data: AppSnapshot; toast: (value
       <div className="button-row"><button className="primary" disabled={!caps.login || data.auth.running} onClick={() => invoke('login', () => window.launcher.login(), 'Xodus sign-in completed.')}>{data.auth.running ? <LoaderCircle className="spin" /> : <LogIn />}{data.auth.stored ? 'Sign in again' : 'Sign in with Xodus'}</button><button className="secondary" disabled={!caps.logout || data.auth.running || data.auth.stored === false} title="Remove saved sign-in credentials and local device registration. Games and saves are kept." onClick={() => invoke('logout', () => window.launcher.logout(), 'Saved sign-in credentials and local device registration were removed.')}>Sign out</button><button className="secondary" disabled={!caps.account || data.auth.running} onClick={() => invoke('account', () => window.launcher.refreshAccount())}><RefreshCw />Refresh status</button></div>
       <PasskeySignInNotice />
     </section>
+
+    <MaximaCard status={data.maxima} busy={busy} invoke={invoke} />
+    <EAAppCard status={data.eaApp} busy={busy} invoke={invoke} />
 
     <section className="settings-card">
       <div className="settings-heading"><div className="settings-icon"><Terminal /></div><div><h2>Xodus backend</h2><p>{data.backend.version ? `Nexus backend ${data.backend.version}` : data.backend.available ? `Backend CLI ${data.backend.capabilities.version ?? 'unknown version'}` : 'Install the prebuilt Nexus backend'}</p></div><span className={`status-label ${data.backend.available ? 'ready' : 'off'}`}><StatusDot tone={data.backend.available ? 'green' : 'red'} />{data.backend.available ? 'VALIDATED' : 'OFFLINE'}</span></div>

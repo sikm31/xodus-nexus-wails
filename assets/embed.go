@@ -13,6 +13,11 @@ var BackendLock []byte
 //go:embed *.patch
 var Patches embed.FS
 
+// Maxima pins the Maxima source and the GPL-3.0 patches Nexus applies to it.
+//
+//go:embed maxima
+var Maxima embed.FS
+
 //go:embed icon.png
 var Icon []byte
 

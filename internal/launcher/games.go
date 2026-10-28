@@ -55,6 +55,9 @@ func (l *Launcher) importGame(input string) (*shared.Game, error) {
 	}
 	entry, err := state.InspectGameDirectory(absolute)
 	if err != nil {
+		if _, eaErr := os.Stat(filepath.Join(absolute, "__Installer", "installerdata.xml")); eaErr == nil {
+			return l.importEAGame(absolute)
+		}
 		return nil, err
 	}
 	if entry.StoreID != "" {
@@ -124,6 +127,9 @@ func (l *Launcher) launchGame(id string) error {
 		l.preparingLaunch = false
 		l.mu.Unlock()
 	}()
+	if entry, ok := l.store.Game(id); ok && entry.Provider == "maxima" {
+		return l.launchEAGame(entry)
+	}
 	return l.prepareGameLaunch(id)
 }
 

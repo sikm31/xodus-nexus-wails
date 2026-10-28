@@ -1,0 +1,13 @@
+{
+  "schema": 1,
+  "repository": "https://github.com/ArmchairDevelopers/Maxima.git",
+  "commit": "cbde5f0002d6f16fb67dfa79ad96b705e1c591bf",
+  "cargoLockSha256": "91ec6be5bb5a63de03f2b161c8cf58b73b6a133ae9ccac415b251d7e9e41629b",
+  "patchId": "nexus-v4",
+  "patches": [
+    {
+      "file": "maxima-nexus.patch",
+      "sha256": "7f6bf6945da1ba5428b50adff76e30553d813e1dc2c984a7003f7459a917e343"
+    }
+  ]
+}

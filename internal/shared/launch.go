@@ -162,6 +162,21 @@ func ParseLaunchOptions(input string) (LaunchOptions, error) {
 	return LaunchOptions{Environment: environment, Prefix: slices.Clone(prefix), GameArgs: slices.Clone(gameArgs)}, nil
 }
 
+const MaxCPULimit = 64
+
+// CPUTopology is the WINE_CPU_TOPOLOGY value exposing the first limit host
+// CPUs, or "" for no limit.
+func CPUTopology(limit int) string {
+	if limit <= 0 {
+		return ""
+	}
+	cpus := make([]string, limit)
+	for i := range cpus {
+		cpus[i] = strconv.Itoa(i)
+	}
+	return fmt.Sprintf("%d:%s", limit, strings.Join(cpus, ","))
+}
+
 // NormalizeLaunchTools validates raw JSON from the renderer. nil means defaults.
 func NormalizeLaunchTools(raw json.RawMessage) (GameLaunchTools, error) {
 	if raw == nil {
@@ -188,6 +203,11 @@ func NormalizeLaunchTools(raw json.RawMessage) (GameLaunchTools, error) {
 		}
 	}
 	result.DualSenseCompatibility = &dualSense
+	if value, present := tools["cpuLimit"]; present && string(value) != "null" {
+		if json.Unmarshal(value, &result.CPULimit) != nil || result.CPULimit < 0 || result.CPULimit > MaxCPULimit {
+			return GameLaunchTools{}, fmt.Errorf("The CPU core limit must be between 1 and %d.", MaxCPULimit)
+		}
+	}
 	result.GamescopeArgs = strings.TrimSpace(result.GamescopeArgs)
 	result.LaunchOptions = strings.TrimSpace(result.LaunchOptions)
 	args, err := CommandWords(result.GamescopeArgs)

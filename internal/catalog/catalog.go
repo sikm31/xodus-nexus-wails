@@ -142,6 +142,7 @@ type packageSupport struct {
 	installProductID string
 	packageFormat    string
 	supportNote      string
+	distributor      string
 }
 
 const metadataUnavailable = "Microsoft package metadata was unavailable. You can still use manual Product ID installation."
@@ -180,7 +181,26 @@ func directPackageSupport(product map[string]any) *packageSupport {
 		return &packageSupport{installability: "unsupported", packageFormat: joined,
 			supportNote: fmt.Sprintf("The PC package uses %s, which the current Xodus streaming path does not support.", joined)}
 	}
+	if eaLauncherProduct(product) {
+		return &packageSupport{installability: "unsupported", distributor: "ea-app",
+			supportNote: "This EA Play title has no Microsoft Store package. Nexus installs it with Maxima (Settings → Maxima), signed in to the EA account linked to Xbox."}
+	}
 	return nil
+}
+
+// EA "Rosebud" products carry a license but no Store package: Windows hands
+// the install over to the EA app.
+func eaLauncherProduct(product map[string]any) bool {
+	isRosebud := func(name string) bool { return strings.HasPrefix(name, "ElectronicArtsMobile.Rosebud-") }
+	properties := object(product["Properties"])
+	// Some titles (Dead Space 2023) keep an older package name but belong to the same product group.
+	if isRosebud(str(properties["PackageFamilyName"])) || str(properties["ProductGroupName"]) == "Rosebud" {
+		return true
+	}
+	return slices.ContainsFunc(list(product["DisplaySkuAvailabilities"]), func(availability any) bool {
+		properties := object(object(object(availability)["Sku"])["Properties"])
+		return isRosebud(str(object(properties["FulfillmentData"])["PackageFamilyName"]))
+	})
 }
 
 type bundleReference struct {
@@ -320,7 +340,7 @@ func ParseProducts(search map[string]any, catalog map[string]any) []shared.Catal
 			StoreURL: safeURL(product["redirectUrl"], storeHosts), Categories: categories,
 			PurchasePrice: purchasePrice(product), IncludedWith: includedWith(product), ReleaseDate: str(product["releaseDateUtc"]),
 			AverageRating: rating, Installability: support.installability, InstallProductID: support.installProductID,
-			PackageFormat: support.packageFormat, SupportNote: support.supportNote,
+			PackageFormat: support.packageFormat, SupportNote: support.supportNote, Distributor: support.distributor,
 		})
 	}
 	return out

@@ -161,9 +161,8 @@ func AntiCheatEnvironment(env launcherenv.Env) launcherenv.Env {
 var vdfPath = regexp.MustCompile(`"path"\s*"((?:\\.|[^"\\])*)"`)
 var vdfEscape = regexp.MustCompile(`\\([\\"])`)
 
-// InstalledEACRuntime discovers an already installed official Steam tool; it
-// never downloads or copies it.
-func InstalledEACRuntime(steamRoot string) string {
+// SteamLibraries lists the Steam root followed by its extra library folders.
+func SteamLibraries(steamRoot string) []string {
 	libraries := []string{steamRoot}
 	if folders, err := os.ReadFile(filepath.Join(steamRoot, "steamapps", "libraryfolders.vdf")); err == nil {
 		for _, match := range vdfPath.FindAllStringSubmatch(string(folders), -1) {
@@ -173,7 +172,13 @@ func InstalledEACRuntime(steamRoot string) string {
 			}
 		}
 	}
-	for _, library := range libraries {
+	return libraries
+}
+
+// InstalledEACRuntime discovers an already installed official Steam tool; it
+// never downloads or copies it.
+func InstalledEACRuntime(steamRoot string) string {
+	for _, library := range SteamLibraries(steamRoot) {
 		root := filepath.Join(library, "steamapps", "common", "Proton EasyAntiCheat Runtime")
 		complete := true
 		for _, name := range []string{"easyanticheat_x64.dll", "easyanticheat_x64.so"} {

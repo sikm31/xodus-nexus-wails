@@ -60,6 +60,39 @@ export interface BackendStatus {
   phase?: string;
 }
 
+export interface EAAppStatus {
+  installed: boolean;
+  running: boolean;
+  signedIn: boolean;
+  busy: boolean;
+  proton?: string;
+  phase?: string;
+  error?: string;
+  logPath?: string;
+}
+
+export interface MaximaStatus {
+  available: boolean;
+  commit?: string;
+  pinnedCommit: string;
+  upstreamCommit?: string;
+  buildRequired: boolean;
+  building: boolean;
+  signedIn: boolean;
+  signingIn: boolean;
+  account?: string;
+  phase?: string;
+  error?: string;
+  canBuild: boolean;
+}
+
+export interface EATitle {
+  slug: string;
+  name: string;
+  offerId: string;
+  installed: boolean;
+}
+
 export interface RuntimeStatus {
   installed: boolean;
   checking: boolean;
@@ -90,6 +123,7 @@ export interface GameLaunchTools {
   gamescope: boolean;
   gamescopeArgs: string;
   launchOptions: string;
+  cpuLimit?: number;
 }
 
 export interface Game {
@@ -117,6 +151,9 @@ export interface Game {
     executable?: string;
     encryptedTarget: boolean;
   };
+  provider?: 'maxima';
+  offerId?: string;
+  eaSlug?: string;
   addedAt: string;
 }
 
@@ -136,6 +173,8 @@ export interface DownloadTask {
   selectedContentId?: string;
   selectionMarket?: string;
   destination: string;
+  provider?: 'maxima';
+  offerId?: string;
   status: 'queued' | 'running' | 'paused' | 'complete' | 'failed' | 'cancelled';
   canPause?: boolean;
   controlPending?: boolean;
@@ -227,6 +266,8 @@ export interface AppSnapshot {
   gameOperation?: GameOperation;
   gameUpdates?: Record<string, GameUpdate>;
   downloadProgressSupported?: boolean;
+  eaApp?: EAAppStatus;
+  maxima?: MaximaStatus;
 }
 
 export interface InstallRequest {
@@ -288,6 +329,7 @@ export interface CatalogProduct {
   releaseDate?: string;
   averageRating?: number;
   installability: 'supported' | 'unsupported' | 'unknown';
+  distributor?: 'ea-app';
   packageFormat?: string;
   supportNote: string;
 }
@@ -413,6 +455,18 @@ export interface LauncherApi {
   chooseDirectory(defaultPath?: string): Promise<string | null>;
   chooseFile(defaultPath?: string): Promise<string | null>;
   openPath(path: string): Promise<void>;
+  installEAApp(): Promise<void>;
+  launchEAApp(): Promise<void>;
+  stopEAApp(): Promise<void>;
+  signOutEAApp(): Promise<void>;
+  openEAAppFor(title: string): Promise<void>;
+  buildMaxima(): Promise<void>;
+  checkMaximaUpdate(): Promise<MaximaStatus>;
+  signInMaxima(): Promise<void>;
+  signOutMaxima(): Promise<void>;
+  getEALibrary(): Promise<EATitle[]>;
+  startEAInstall(request: InstallRequest): Promise<string>;
+  openEAAccountLinking(): Promise<void>;
   onSnapshot(callback: (snapshot: AppSnapshot) => void): () => void;
   onOperationLog(callback: (entry: { scope: string; line: string }) => void): () => void;
   isDemoTour(): boolean;

@@ -815,6 +815,10 @@ func (l *Launcher) resumeDownload(id string) error {
 			if _, err := l.installGameContent(task.GameID, task.ProductID); err != nil {
 				return err
 			}
+		} else if task.Provider == "maxima" {
+			if _, err := l.StartEAInstall(shared.InstallRequest{ProductID: task.ProductID, Title: task.Title, Destination: task.Destination}); err != nil {
+				return err
+			}
 		} else if _, err := l.startInstall(shared.InstallRequest{ProductID: task.ProductID, Title: task.Title, Destination: task.Destination,
 			SelectedContentID: task.SelectedContentID, SelectionMarket: task.SelectionMarket}, update, &resumed); err != nil {
 			return err

@@ -1,0 +1,283 @@
+diff --git a/maxima-cli/src/main.rs b/maxima-cli/src/main.rs
+index de2ce96..a7ed9bc 100644
+--- a/maxima-cli/src/main.rs
++++ b/maxima-cli/src/main.rs
+@@ -68,6 +68,15 @@ enum Mode {
+         login: Option<String>,
+     },
+     ListGames,
++    /// Owned titles as one JSON array on stdout.
++    Library,
++    /// Non-interactive install with JSON progress lines on stdout.
++    Install {
++        offer_id: String,
++
++        #[arg(long)]
++        path: String,
++    },
+     LocateGame {
+         path: String,
+     },
+@@ -133,6 +142,7 @@ async fn main() {
+             Ok(_) => error!("{}:\n{}", e, e.backtrace().to_string()),
+             Err(_) => error!("{}: {}", e, e.root_cause()),
+         }
++        std::process::exit(1);
+     }
+ }
+ 
+@@ -301,6 +311,8 @@ async fn startup() -> Result<()> {
+             start_game(&offer_id, game_path, game_args, login, maxima_arc.clone()).await
+         }
+         Mode::ListGames => list_games(maxima_arc.clone()).await,
++        Mode::Library => library_json(maxima_arc.clone()).await,
++        Mode::Install { offer_id, path } => install_game(maxima_arc.clone(), &offer_id, &path).await,
+         Mode::LocateGame { path } => locate_game(maxima_arc.clone(), &path).await,
+         Mode::CloudSync { game_slug, write } => {
+             do_cloud_sync(maxima_arc.clone(), &game_slug, write).await
+@@ -473,6 +485,58 @@ async fn interactive_install_game(maxima_arc: LockedMaxima) -> Result<()> {
+     Ok(())
+ }
+ 
++async fn library_json(maxima_arc: LockedMaxima) -> Result<()> {
++    let mut maxima = maxima_arc.lock().await;
++    let mut entries = Vec::new();
++    for title in maxima.mut_library().games().await? {
++        let offer = title.base_offer();
++        let installed = offer.is_installed().await;
++        let execute_path = if installed { offer.execute_path(false).await.ok() } else { None };
++        entries.push(serde_json::json!({"slug": offer.slug(), "name": title.name(),
++            "offerId": offer.offer_id(), "installed": installed, "executePath": execute_path}));
++    }
++    println!("{}", serde_json::Value::Array(entries));
++    Ok(())
++}
++
++async fn install_game(maxima_arc: LockedMaxima, offer_id: &str, path: &str) -> Result<()> {
++    let path = PathBuf::from(path);
++    if !path.is_absolute() {
++        bail!("Install path {:?} is not absolute.", path);
++    }
++    let mut maxima = maxima_arc.lock().await;
++    let builds = maxima.content_manager().service().available_builds(offer_id).await?;
++    let Some(build) = builds.live_build() else {
++        bail!("Couldn't find a suitable game build");
++    };
++    println!("{}", serde_json::json!({"event": "build", "offerId": offer_id, "buildId": build.build_id()}));
++    let game = QueuedGameBuilder::default()
++        .offer_id(offer_id.to_owned())
++        .build_id(build.build_id().to_owned())
++        .path(path.clone())
++        .build()?;
++    maxima.content_manager().install_now(game).await?;
++    drop(maxima);
++
++    loop {
++        let mut maxima = maxima_arc.lock().await;
++        maxima.consume_pending_events();
++        maxima.update().await;
++        let Some(downloader) = maxima.content_manager().current() else {
++            break;
++        };
++        if let Some(error) = downloader.error() {
++            bail!("Install failed: {}", error);
++        }
++        println!("{}", serde_json::json!({"event": "progress", "downloaded": downloader.bytes_downloaded(),
++            "total": downloader.bytes_total(), "percent": downloader.percentage_done()}));
++        drop(maxima);
++        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
++    }
++    println!("{}", serde_json::json!({"event": "done", "path": path}));
++    Ok(())
++}
++
+ async fn download_specific_file(
+     maxima_arc: LockedMaxima,
+     offer: &str,
+diff --git a/maxima-lib/src/content/manager.rs b/maxima-lib/src/content/manager.rs
+index f16116d..66d3667 100644
+--- a/maxima-lib/src/content/manager.rs
++++ b/maxima-lib/src/content/manager.rs
+@@ -89,6 +89,8 @@ pub enum DownloaderError {
+     EntrySize { requested: u64, entry: usize },
+     #[error("unsupported compression type `{0:?}`")]
+     CompressionType(CompressionType),
++    #[error("{0} files failed to download")]
++    FilesFailed(usize),
+ }
+ 
+ impl DownloadQueue {
+@@ -133,6 +135,7 @@ pub struct GameDownloader {
+     total_count: usize,
+     total_bytes: usize,
+     notify: Arc<Notify>,
++    error: Arc<std::sync::Mutex<Option<String>>>,
+ }
+ 
+ impl GameDownloader {
+@@ -171,6 +174,7 @@ impl GameDownloader {
+             total_count,
+             total_bytes,
+             notify: Arc::new(Notify::new()),
++            error: Arc::new(std::sync::Mutex::new(None)),
+         })
+     }
+ 
+@@ -178,6 +182,7 @@ impl GameDownloader {
+         let (downloader_arc, entries, cancel_token, completed_bytes, notify) =
+             self.prepare_download_vars();
+         let total_count = self.total_count;
++        let error = self.error.clone();
+         tokio::spawn(async move {
+             let dl = GameDownloader::start_downloads(
+                 total_count,
+@@ -189,7 +194,8 @@ impl GameDownloader {
+             )
+             .await;
+             if let Err(err) = dl {
+-                error!("Error when downloading!: `{:?}", err)
++                error!("Error when downloading!: `{:?}", err);
++                *error.lock().unwrap() = Some(err.to_string());
+             }
+         });
+     }
+@@ -221,6 +227,7 @@ impl GameDownloader {
+         notify: Arc<Notify>,
+     ) -> Result<(), DownloaderError> {
+         let mut handles = Vec::with_capacity(total_count);
++        let failed = Arc::new(AtomicUsize::new(0));
+ 
+         for i in 0..total_count {
+             let downloader = downloader_arc.clone();
+@@ -228,6 +235,7 @@ impl GameDownloader {
+ 
+             let cancel_token = cancel_token.clone();
+             let completed_bytes = completed_bytes.clone();
++            let failed = failed.clone();
+ 
+             handles.push(async move {
+                 if ele.name().contains("Cleanup") {
+@@ -240,6 +248,7 @@ impl GameDownloader {
+                     }))) => {
+                         if let Err(err) = result {
+                             error!("File download failed: {}", err);
++                            failed.fetch_add(1, Ordering::SeqCst);
+                         }
+                     },
+                     _ = cancel_token.cancelled() => {
+@@ -254,6 +263,13 @@ impl GameDownloader {
+             .collect::<Vec<_>>()
+             .await;
+ 
++        // Completed files are skipped on the next attempt, so a retry only
++        // fetches what failed. Touchup must not run on an incomplete install.
++        let failed = failed.load(Ordering::SeqCst);
++        if failed > 0 {
++            return Err(DownloaderError::FilesFailed(failed));
++        }
++
+         let path = downloader_arc.path();
+ 
+         info!("Files downloaded, running touchup...");
+@@ -278,7 +294,12 @@ impl GameDownloader {
+     }
+ 
+     pub fn is_done(&self) -> bool {
+-        self.completed_bytes.load(Ordering::SeqCst) == self.total_bytes
++        // Retried ranges are counted again, so completed can overshoot.
++        self.completed_bytes.load(Ordering::SeqCst) >= self.total_bytes
++    }
++
++    pub fn error(&self) -> Option<String> {
++        self.error.lock().unwrap().clone()
+     }
+ 
+     pub fn percentage_done(&self) -> f64 {
+diff --git a/maxima-lib/src/core/manifest/dip.rs b/maxima-lib/src/core/manifest/dip.rs
+index b8da5ce..d8a420f 100644
+--- a/maxima-lib/src/core/manifest/dip.rs
++++ b/maxima-lib/src/core/manifest/dip.rs
+@@ -196,7 +196,7 @@ impl DiPManifest {
+             core::launch::mx_linux_setup,
+             unix::{
+                 fs::case_insensitive_path,
+-                wine::{invalidate_mx_wine_registry, run_wine_command, CommandType},
++                wine::{invalidate_mx_wine_registry, run_touchup_command},
+             },
+         };
+ 
+@@ -208,7 +208,7 @@ impl DiPManifest {
+         let args = self.collect_touchup_args(&install_path)?;
+         let path = install_path.join(&self.touchup.path());
+         let path = case_insensitive_path(path);
+-        run_wine_command(path, Some(args), None, true, CommandType::Run).await?;
++        run_touchup_command(path, args, &install_path).await?;
+ 
+         invalidate_mx_wine_registry().await;
+         Ok(())
+diff --git a/maxima-lib/src/core/manifest/pre_dip.rs b/maxima-lib/src/core/manifest/pre_dip.rs
+index 0ec9e1b..df7cf5d 100644
+--- a/maxima-lib/src/core/manifest/pre_dip.rs
++++ b/maxima-lib/src/core/manifest/pre_dip.rs
+@@ -111,7 +111,7 @@ impl PreDiPManifest {
+             core::launch::mx_linux_setup,
+             unix::{
+                 fs::case_insensitive_path,
+-                wine::{invalidate_mx_wine_registry, run_wine_command, CommandType},
++                wine::{invalidate_mx_wine_registry, run_touchup_command},
+             },
+         };
+ 
+@@ -124,7 +124,7 @@ impl PreDiPManifest {
+ 
+         let path = install_path.join(remove_leading_slash(&self.executable.file_path));
+         let path = case_insensitive_path(path);
+-        run_wine_command(path, Some(args), None, true, CommandType::Run).await?;
++        run_touchup_command(path, args, &install_path).await?;
+ 
+         invalidate_mx_wine_registry().await;
+         Ok(())
+diff --git a/maxima-lib/src/unix/wine.rs b/maxima-lib/src/unix/wine.rs
+index 50c61a6..c05ada7 100644
+--- a/maxima-lib/src/unix/wine.rs
++++ b/maxima-lib/src/unix/wine.rs
+@@ -29,7 +29,7 @@ use crate::util::{
+ };
+ 
+ lazy_static! {
+-    static ref PROTON_PATTERN: Regex = Regex::new(r"GE-Proton\d+-\d+\.tar\.gz").unwrap();
++    static ref PROTON_PATTERN: Regex = Regex::new(r"GE-Proton\d+-\d+(-x86_64)?\.tar\.gz").unwrap();
+ }
+ 
+ // A Proton verb to use
+@@ -234,6 +234,30 @@ fn get_wine_release() -> Result<GithubRelease, WineError> {
+     release.ok_or(WineError::Fetch)
+ }
+ 
++/// Runs a game's touchup installer with its DirectX redistributable stubbed
++/// out. DXSETUP's Managed DirectX step needs .NET Framework and fails under
++/// Wine, aborting the touchup before it registers the game; Proton already
++/// ships the d3dx libraries. The original file is restored afterwards so the
++/// downloader's verification stays clean.
++pub async fn run_touchup_command(touchup: PathBuf, args: Vec<PathBuf>, install_path: &PathBuf) -> Result<(), NativeError> {
++    let dxsetup = crate::unix::fs::case_insensitive_path(install_path.join("__Installer/directx/redist/DXSETUP.exe"));
++    let stub = wine_prefix_dir()?.join("pfx/drive_c/windows/syswow64/rundll32.exe");
++    let original = dxsetup.with_file_name("DXSETUP.exe.nexus-original");
++    let stubbed = dxsetup.is_file() && stub.exists();
++    if stubbed {
++        std::fs::rename(&dxsetup, &original)?;
++        if let Err(err) = std::fs::copy(&stub, &dxsetup) {
++            std::fs::rename(&original, &dxsetup)?;
++            return Err(err.into());
++        }
++    }
++    let result = run_wine_command(touchup, Some(args), None, true, CommandType::Run).await;
++    if stubbed {
++        std::fs::rename(&original, &dxsetup)?;
++    }
++    result.map(|_| ())
++}
++
+ pub async fn run_wine_command<I: IntoIterator<Item = T>, T: AsRef<OsStr>>(
+     arg: T,
+     args: Option<I>,
